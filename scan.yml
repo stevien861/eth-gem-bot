@@ -1,0 +1,50 @@
+name: ETH gem scan
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"   # every 10 minutes (GitHub may delay a few minutes)
+  workflow_dispatch: {}       # lets you press "Run workflow" by hand
+
+permissions:
+  contents: write             # needed to save seen.json (stops repeat alerts)
+
+concurrency:
+  group: scan
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install -r requirements.txt
+
+      - name: Run scanner
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          # Optional tuning — set these under Settings > Secrets and variables > Actions > Variables
+          MAX_FDV: ${{ vars.MAX_FDV }}
+          MIN_AGE_HOURS: ${{ vars.MIN_AGE_HOURS }}
+          MIN_LIQUIDITY: ${{ vars.MIN_LIQUIDITY }}
+          MIN_BUYERS_1H: ${{ vars.MIN_BUYERS_1H }}
+          MIN_VOLUME_1H: ${{ vars.MIN_VOLUME_1H }}
+          REQUIRE_RENOUNCED: ${{ vars.REQUIRE_RENOUNCED }}
+          REQUIRE_SOCIALS: ${{ vars.REQUIRE_SOCIALS }}
+          REQUIRE_VERIFIED_SOURCE: ${{ vars.REQUIRE_VERIFIED_SOURCE }}
+          MAX_TOP_WALLET_PERCENT: ${{ vars.MAX_TOP_WALLET_PERCENT }}
+          HEARTBEAT: ${{ vars.HEARTBEAT }}
+        run: python bot.py
+
+      - name: Save seen list
+        run: |
+          git config user.name "gem-bot"
+          git config user.email "gem-bot@users.noreply.github.com"
+          git add seen.json || true
+          git diff --cached --quiet || (git commit -m "update seen list [skip ci]" && git push)
